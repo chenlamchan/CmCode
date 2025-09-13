@@ -59,7 +59,7 @@ double const SQRT2 = sqrt(2.0);
 bool dbgStop = false;
 
 mt19937 randEng;
-uniform_int<int> randInt(0, 0x7fffffff);
+std::uniform_int_distribution<int> randInt(0, 0x7fffffff);
 
 double dummyD;
 int dummyI;

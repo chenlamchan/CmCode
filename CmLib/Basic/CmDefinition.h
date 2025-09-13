@@ -49,7 +49,7 @@ typedef const vecM CvecM;
 typedef const vecS CvecS;
 
 extern mt19937 randEng;
-extern uniform_int<int> randInt;
+extern std::uniform_int_distribution<int> randInt;
 
 extern double dummyD;
 extern int dummyI;
