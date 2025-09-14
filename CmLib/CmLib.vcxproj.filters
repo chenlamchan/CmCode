@@ -157,6 +157,12 @@
     <ClInclude Include="Illustration\CmIllustr.h">
       <Filter>Illustration</Filter>
     </ClInclude>
+    <ClInclude Include="Saliency\CmAdaptiveTripleThresh.h">
+      <Filter>Saliency</Filter>
+    </ClInclude>
+    <ClInclude Include="Saliency\ContrastEnhancer.h">
+      <Filter>Saliency</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="stdafx.cpp">
@@ -248,6 +254,12 @@
     </ClCompile>
     <ClCompile Include="Illustration\CmIllustr.cpp">
       <Filter>Illustration</Filter>
+    </ClCompile>
+    <ClCompile Include="Saliency\CmAdaptiveTripleThresh.cpp">
+      <Filter>Saliency</Filter>
+    </ClCompile>
+    <ClCompile Include="Saliency\ContrastEnhancer.cpp">
+      <Filter>Saliency</Filter>
     </ClCompile>
   </ItemGroup>
 </Project>

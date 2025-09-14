@@ -163,7 +163,9 @@
     <ClInclude Include="OtherAlg\CmValStructVec.h" />
     <ClInclude Include="Saliency\CmSalCut.h" />
     <ClInclude Include="Saliency\CmSaliencyGC.h" />
+    <ClInclude Include="Saliency\CmAdaptiveTripleThresh.h" />
     <ClInclude Include="Saliency\CmSaliencyRC.h" />
+    <ClInclude Include="Saliency\ContrastEnhancer.h" />
     <ClInclude Include="Segmentation\EfficientGraphBased\disjoint-set.h" />
     <ClInclude Include="Segmentation\EfficientGraphBased\segment-graph.h" />
     <ClInclude Include="Segmentation\EfficientGraphBased\segment-image.h" />
@@ -201,7 +203,9 @@
     <ClCompile Include="OtherAlg\CmCurveEx.cpp" />
     <ClCompile Include="Saliency\CmSalCut.cpp" />
     <ClCompile Include="Saliency\CmSaliencyGC.cpp" />
+    <ClCompile Include="Saliency\CmAdaptiveTripleThresh.cpp" />
     <ClCompile Include="Saliency\CmSaliencyRC.cpp" />
+    <ClCompile Include="Saliency\ContrastEnhancer.cpp" />
     <ClCompile Include="Segmentation\EfficientGraphBased\segment-image.cpp" />
     <ClCompile Include="Segmentation\MeanShift\ms.cpp" />
     <ClCompile Include="Segmentation\MeanShift\msImageProcessor.cpp" />

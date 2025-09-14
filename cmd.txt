@@ -1,0 +1,3 @@
+To change directory to where the saliency.exe at
+
+Saliency.exe C:\Users\Tuf\Desktop\Master_in_CS\Sem_3\Models\CmCode\

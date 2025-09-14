@@ -5,6 +5,7 @@
 /*	  based Salient Region Detection. IEEE CVPR, p. 409-416, 2011.		*/
 /************************************************************************/
 
+#include "CmAdaptiveTripleThresh.h"
 
 class CmSalCut
 {
@@ -18,6 +19,9 @@ public: // Functions for saliency cut
 	// Refer initialize for parameters
 	static Mat CutObjs(CMat &img3f, CMat &sal1f, float t1 = 0.2f, float t2 = 0.9f, 
 		CMat &borderMask = Mat(), int wkSize = 20);
+
+	// Adaptive Triple Thresholding method
+	static Mat CutObjsATT(CMat& img3f, CMat& sal1f, int windowSizeFactor = 2, int grabCutIterations = 5);
 
 	static int Demo(CStr imgNameW, CStr gtImgW, CStr salDir);
 

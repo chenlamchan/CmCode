@@ -1,5 +1,7 @@
 #include "StdAfx.h"
 #include "CmSalCut.h"
+#include "ContrastEnhancer.h"
+
 
 
 CmSalCut::CmSalCut(CMat &img3f)
@@ -115,6 +117,11 @@ Mat CmSalCut::CutObjs(CMat &_img3f, CMat &_sal1f, float t1, float t2, CMat &_bor
 	Mat resMask = Mat::zeros(_img3f.size(), CV_8U);
 	fMask.copyTo(resMask(rect));
 	return resMask;
+}
+
+Mat CmSalCut::CutObjsATT(CMat& img3f, CMat& sal1f, int windowSizeFactor, int grabCutIterations)
+{
+	return CmAdaptiveTripleThresh::CutObjsAdaptive(img3f, sal1f, windowSizeFactor, grabCutIterations);
 }
 
 // Initialize using saliency map. In the Trimap: background < t1, foreground > t2, others unknown.
@@ -303,38 +310,75 @@ int CmSalCut::Demo(CStr imgNameW, CStr gtImgW, CStr salDir)
 	int imgNum = CmFile::GetNamesNE(imgNameW, names, inDir, ext);
 	CmFile::MkDir(salDir);
 	printf("Get saliency maps for images `%s' and save results to `%s'\n", imgNameW.c_str(), salDir.c_str());
-	CmTimer tm("Saliency detection and segmentation");
-	tm.Start();
+	
+	CmTimer tmRC("RC + Original SalCut");
+	CmTimer tmATT("RC + Adaptive Triple Thresholding");
+
+	tmRC.Start();
 
 #pragma omp parallel for 
 	for (int i = 0; i < imgNum; i++){
 		string name = names[i] + ext;
-		if (CmFile::FileExist(salDir + names[i] + "_RCC.png"))
+		if (CmFile::FileExist(salDir + names[i] + "_RCC.png") && 
+			CmFile::FileExist(salDir + names[i] + "_RCATT.png"))
 			continue;
 
 		printf("Processing %d/%dth image: %-70s\r", i, imgNum, _S(name));
 		Mat sal, img3f = imread(inDir + name);
 		CV_Assert_(img3f.data != NULL, ("Can't load image %s\n", _S(name)));
 		img3f.convertTo(img3f, CV_32FC3, 1.0/255);
+
+		// Generate Region Contrast saliency map
 		sal = CmSaliencyRC::GetRC(img3f);
 		imwrite(salDir + names[i] + "_RC.png", sal*255);
 
-		Mat cutMat;
-		float t = 0.9f;
-		int maxIt = 4;
-		GaussianBlur(sal, sal, Size(9, 9), 0);
-		normalize(sal, sal, 0, 1, NORM_MINMAX);
-		while (cutMat.empty() && maxIt--){
-			cutMat = CmSalCut::CutObjs(img3f, sal, 0.1f, t);
-			t -= 0.2f;
+		// Method 1: Original SalCut approach
+		if (!CmFile::FileExist(salDir + names[i] + "_RCC.png")) {
+			Mat cutMat;
+			float t = 0.9f;
+			int maxIt = 4;
+			GaussianBlur(sal, sal, Size(9, 9), 0);
+			normalize(sal, sal, 0, 1, NORM_MINMAX);
+			while (cutMat.empty() && maxIt--) {
+				cutMat = CmSalCut::CutObjs(img3f, sal, 0.1f, t);
+				t -= 0.2f;
+			}
+			if (!cutMat.empty())
+				imwrite(salDir + names[i] + "_RCC.png", cutMat);
+			else
+				printf("Image(.jpg): %s", _S(names[i] + "\n"));
 		}
-		if (!cutMat.empty())
-			imwrite(salDir + names[i] + "_RCC.png", cutMat);
-		else
-			printf("Image(.jpg): %s", _S(names[i] + "\n"));
+
+		// Method 2: Adaptive Triple Thresholding approach
+		if (!CmFile::FileExist(salDir + names[i] + "_RCATT.png")) {
+			Mat salNormalized = sal.clone();
+
+			//Apply light smoothing (less than original method)
+			//GaussianBlur(salNormalized, salNormalized, Size(9, 9), 0);
+			//normalize(salNormalized, salNormalized, 0, 1, NORM_MINMAX);
+
+			// Apply Adaptive Triple Thresholding
+			Mat attResult = CmSalCut::CutObjsATT(img3f, salNormalized, 2, 5);
+
+			if (!attResult.empty()) {
+				// Post-process: remove small components
+				Mat cleanedResult = CmCv::GetNZRegionsLS(attResult, 0.005);
+				if (!cleanedResult.empty()) {
+					imwrite(salDir + names[i] + "_RCATT.png", cleanedResult);
+				}
+				else {
+					imwrite(salDir + names[i] + "_RCATT.png", attResult);
+				}
+			}
+			else {
+				printf("Adaptive Triple Thresholding failed for image: %s\n", _S(names[i]));
+			}
+
+		}
+		
 	}
-	tm.Stop();
-	printf("Salient object detection and segmentation finished, %g seconds used per image\n", tm.TimeInSeconds()/imgNum);
+	tmRC.Stop();
+	printf("Salient object detection and segmentation finished, %g seconds used per image\n", tmRC.TimeInSeconds()/imgNum);
 
 	//printf("Evaluate saliency maps according to ground truth results `%s'\n", gtImgW.c_str());
 	//CmEvaluation::Evaluate(gtImgW, salDir, resultFileName, "_RC");
