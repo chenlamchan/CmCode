@@ -343,31 +343,37 @@ int CmSalCut::Demo(CStr imgNameW, CStr gtImgW, CStr salDir)
 				cutMat = CmSalCut::CutObjs(img3f, sal, 0.1f, t);
 				t -= 0.2f;
 			}
-			if (!cutMat.empty())
+			if (!cutMat.empty()) {
 				imwrite(salDir + names[i] + "_RCC.png", cutMat);
-			else
+			}
+			else {
 				printf("Image(.jpg): %s", _S(names[i] + "\n"));
+			}
+				
 		}
 
 		// Method 2: Adaptive Triple Thresholding approach
 		if (!CmFile::FileExist(salDir + names[i] + "_RCATT.png")) {
-			Mat salNormalized = sal.clone();
+			ContrastEnhancer enhancer;
+			Mat enhanced_img3f = enhancer.process(img3f);
+			Mat enhanced_sal = CmSaliencyRC::GetRC(enhanced_img3f);
+			imwrite(salDir + names[i] + "_GCE.png", enhanced_sal * 255);
 
 			//Apply light smoothing (less than original method)
-			//GaussianBlur(salNormalized, salNormalized, Size(9, 9), 0);
-			//normalize(salNormalized, salNormalized, 0, 1, NORM_MINMAX);
+			GaussianBlur(enhanced_sal, enhanced_sal, Size(9, 9), 0);
+			normalize(enhanced_sal, enhanced_sal, 0, 1, NORM_MINMAX);
 
 			// Apply Adaptive Triple Thresholding
-			Mat attResult = CmSalCut::CutObjsATT(img3f, salNormalized, 2, 5);
+			Mat attResult = CmSalCut::CutObjsATT(enhanced_img3f, enhanced_sal, 2, 5);
 
 			if (!attResult.empty()) {
 				// Post-process: remove small components
 				Mat cleanedResult = CmCv::GetNZRegionsLS(attResult, 0.005);
 				if (!cleanedResult.empty()) {
-					imwrite(salDir + names[i] + "_RCATT.png", cleanedResult);
+					imwrite(salDir + names[i] + "_GCEATT.png", cleanedResult);
 				}
 				else {
-					imwrite(salDir + names[i] + "_RCATT.png", attResult);
+					imwrite(salDir + names[i] + "_GCEATT.png", attResult);
 				}
 			}
 			else {

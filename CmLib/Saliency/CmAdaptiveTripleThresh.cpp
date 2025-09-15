@@ -10,7 +10,7 @@ CmAdaptiveTripleThresh::CmAdaptiveTripleThresh(CMat& img3f, CMat& sal1f)
 
     // Set window size - use half the width as mentioned in the document
     _windowSize = max(2, _w / 2);
-    if (_windowSize % 2 == 1) _windowSize++; // Ensure even window size
+    //if (_windowSize % 2 == 1) _windowSize++; // Ensure even window size
 
     // Find global maximum saliency value L
     double minVal;
@@ -28,7 +28,13 @@ CmAdaptiveTripleThresh::~CmAdaptiveTripleThresh(void)
 void CmAdaptiveTripleThresh::buildIntegralImage()
 {
     // Build integral image for fast rectangle sum computation
-    integral(_sal1f, _integralImg, CV_64F);
+    try {
+        integral(_sal1f, _integralImg, CV_64F);
+    }
+    catch (const cv::Exception& e) {
+        printf("Error building integral image: %s\n", e.what());
+        throw;
+    }
 }
 
 double CmAdaptiveTripleThresh::calculateRectangleSum(int x1, int y1, int x2, int y2)
@@ -36,8 +42,13 @@ double CmAdaptiveTripleThresh::calculateRectangleSum(int x1, int y1, int x2, int
     // Ensure coordinates are within bounds
     x1 = max(0, min(x1, _w - 1));
     y1 = max(0, min(y1, _h - 1));
-    x2 = max(0, min(x2, _w - 1));
-    y2 = max(0, min(y2, _h - 1));
+    x2 = max(x1, min(x2, _w - 1));
+    y2 = max(y1, min(y2, _h - 1));
+
+    if (x2 + 1 >= _integralImg.cols || y2 + 1 >= _integralImg.rows) {
+        printf("Warning: Integral image bounds exceeded\n");
+        return 0.0;
+    }
 
     // Calculate sum using integral image formula: I(x2,y2) - I(x1-1,y2) - I(x2,y1-1) + I(x1-1,y1-1)
     double sum = _integralImg.at<double>(y2 + 1, x2 + 1);
@@ -46,7 +57,7 @@ double CmAdaptiveTripleThresh::calculateRectangleSum(int x1, int y1, int x2, int
     if (y1 > 0) sum -= _integralImg.at<double>(y1, x2 + 1);
     if (x1 > 0 && y1 > 0) sum += _integralImg.at<double>(y1, x1);
 
-    return sum;
+    return max(0.0,sum);
 }
 
 Mat CmAdaptiveTripleThresh::performAdaptiveThresholding()
@@ -129,17 +140,18 @@ Mat CmAdaptiveTripleThresh::generateGrabCutMask(CMat& classificationMap)
 
             switch (classification) {
             case CERTAIN_BACKGROUND:
-                maskRow[x] = GC_BGD; // Definite background
+                maskRow[x] = cv::GC_BGD; // Definite background
                 break;
             case PROBABLE_BACKGROUND:
-                maskRow[x] = GC_PR_BGD; // Probable background  
+                maskRow[x] = cv::GC_PR_BGD; // Probable background  
                 break;
             case PROBABLE_FOREGROUND:
-                maskRow[x] = GC_PR_FGD; // Probable foreground
+                maskRow[x] = cv::GC_PR_FGD; // Probable foreground
                 break;
             case CERTAIN_FOREGROUND:
-                maskRow[x] = GC_FGD; // Definite foreground
+                maskRow[x] = cv::GC_FGD; // Definite foreground
                 break;
+
             }
         }
     }
@@ -157,13 +169,19 @@ Mat CmAdaptiveTripleThresh::applyGrabCut(CMat& classificationMap, int iterations
     _img3f.convertTo(img8u, CV_8UC3, 255);
 
     // Apply GrabCut algorithm
-    cv::grabCut(img8u, grabCutMask, Rect(), bgdModel, fgdModel, iterations, GC_INIT_WITH_MASK);
+    try {
+        cv::grabCut(img8u, grabCutMask, Rect(), bgdModel, fgdModel, iterations, cv::GC_INIT_WITH_MASK);
+    }
+    catch (const cv::Exception& e) {
+        printf("GrabCut failed: %s\n", e.what());
+        return Mat();
+    }
 
     // Generate final binary mask (foreground pixels = 255, background = 0)
     Mat finalMask;
     //compare(grabCutMask & 1, 0, finalMask, CMP_NE);
 
-    finalMask = (grabCutMask == GC_FGD) | (grabCutMask == GC_PR_FGD);
+    finalMask = (grabCutMask == cv::GC_FGD) | (grabCutMask == cv::GC_PR_FGD);
 
     return finalMask;
 }
