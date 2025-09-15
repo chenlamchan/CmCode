@@ -18,11 +18,19 @@ public:
     ContrastEnhancer();
 
     /**
-     * @brief Enhance the contrast of a BGR image
+     * @brief Enhance the contrast of a BGR image using custom implementation
      * @param imageBGR Input BGR image
      * @return Enhanced image in the same format as input, or empty Mat on error
      */
     Mat process(const Mat& imageBGR);
+
+    /**
+     * @brief Enhance the contrast of a BGR image using OpenCV implementation
+     * @param imageBGR Input BGR image
+     * @return Enhanced image in the same format as input, or empty Mat on error
+     */
+    Mat processOptimized(const Mat& imageBGR);
+
 
     /**
      * @brief Demo function to process multiple images from a directory
@@ -62,6 +70,25 @@ private:
      * @return true if valid, false otherwise
      */
     bool isValidInput(const Mat& image);
+
+    /**
+     * @brief Custom BGR to YCrCb conversion following the paper's exact equations
+     * Uses the specific coefficients and delta values mentioned in the research paper:
+     * Y = 0.299*R + 0.587*G + 0.114*B
+     * Cr = (R-Y)*0.713 + 128
+     * Cb = (B-Y)*0.564 + 128
+     * @param bgr Input BGR image (CV_8UC3)
+     * @return YCrCb image with paper-specific conversion
+     */
+    Mat customBGRtoYCrCb(const Mat& bgr);
+
+    /**
+     * @brief Custom YCrCb to BGR conversion (inverse of customBGRtoYCrCb)
+     * Applies the inverse transformation to convert back to BGR color space
+     * @param ycrcb Input YCrCb image (CV_8UC3)
+     * @return BGR image
+     */
+    Mat customYCrCbtoBGR(const Mat& ycrcb);
 };
 
 #endif
