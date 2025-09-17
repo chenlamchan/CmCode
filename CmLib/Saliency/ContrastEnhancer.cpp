@@ -181,6 +181,221 @@ Mat ContrastEnhancer::customYCrCbtoBGR(const Mat& ycrcb) {
     return bgr;
 }
 
+void ContrastEnhancer::globalContrastEnhancement(const Mat& src, Mat& dst) {
+    // Validate input
+    if (src.empty() || src.channels() != 1) {
+        dst = src.clone();
+        return;
+    }
+
+    // Find minimum and maximum pixel values in the image
+    double minVal, maxVal;
+    minMaxLoc(src, &minVal, &maxVal);
+
+    // If image has no contrast (min == max), return original
+    if (abs(maxVal - minVal) < 1e-6) {
+        dst = src.clone();
+        printf("No contrast detected, returning original image\n");
+        return;
+    }
+
+    // Apply contrast stretching formula to map [minVal, maxVal] -> [0, 255]
+    // Formula: new_pixel = ((old_pixel - min) * 255) / (max - min)
+    double alpha = 219.0 / (maxVal - minVal);  // Scale factor
+    double beta = 16.0 - minVal * alpha;             // Offset to shift min to 0
+
+    printf("Transform parameters: alpha=%.6f, beta=%.6f\n", alpha, beta);
+
+    if (src.type() == CV_8UC1) {
+        // For 8-bit images, stretch to full [0, 255] range
+        src.convertTo(dst, CV_8UC1, alpha, beta);
+    }
+    else if (src.type() == CV_32FC1) {
+        // For float images, we need to decide the target range
+        // Option 1: Stretch to [0, 1] range
+        double alpha_float = 1.0 / (maxVal - minVal);
+        double beta_float = -minVal * alpha_float;
+        src.convertTo(dst, CV_32FC1, alpha_float, beta_float);
+        printf("Float transform: alpha=%.6f, beta=%.6f\n", alpha_float, beta_float);
+    }
+    else {
+        // For other types, stretch to [0, 255] equivalent
+        src.convertTo(dst, src.type(), alpha, beta);
+    }
+
+    // Verify the transformation worked
+    double newMin, newMax;
+    minMaxLoc(dst, &newMin, &newMax);
+    printf("Output range: [%.1f, %.1f]\n", newMin, newMax);
+
+}
+
+void ContrastEnhancer::localContrastStretching(const Mat& src, Mat& dst,
+    int kernelSize,
+    double sigma,
+    double amount,
+    double threshold) {
+    if (src.empty() || src.channels() != 1) {
+        dst = src.clone();
+        return;
+    }
+
+    // Step 1: Apply Gaussian blur to get low-frequency component
+    Mat blurred;
+    Size kSize(kernelSize, kernelSize);
+    GaussianBlur(src, blurred, kSize, sigma, sigma);
+
+    // Step 2: Create unsharp mask (high-frequency component)
+    // unsharp_mask = original - blurred
+    Mat unsharpMask;
+    subtract(src, blurred, unsharpMask);
+
+    // Step 3: Apply unsharp masking
+    // enhanced = original + amount * unsharp_mask
+    Mat enhanced;
+    if (src.type() == CV_8UC1) {
+        // For uint8, need to handle potential overflow
+        Mat temp;
+        unsharpMask.convertTo(temp, CV_16SC1);
+        temp *= amount;
+
+        Mat srcTemp;
+        src.convertTo(srcTemp, CV_16SC1);
+        srcTemp += temp;
+
+        // Clamp and convert back
+        srcTemp.convertTo(enhanced, CV_8UC1);
+    }
+    else if (src.type() == CV_32FC1) {
+        // For float, direct operation
+        addWeighted(src, 1.0, unsharpMask, amount, 0, enhanced);
+    }
+    else {
+        enhanced = src.clone();
+    }
+
+    //// Step 4: Apply threshold (optional)
+    //if (threshold > 0) {
+    //    Mat mask;
+    //    threshold(abs(unsharpMask), mask, threshold, 1, THRESH_BINARY);
+    //    mask.convertTo(mask, enhanced.type());
+
+    //    Mat result;
+    //    enhanced.copyTo(result, mask);
+    //    src.copyTo(result, 1 - mask);
+    //    enhanced = result;
+    //}
+
+    enhanced.copyTo(dst);
+
+    printf("Local contrast stretching applied: kernel=%d, sigma=%.1f, amount=%.1f\n",
+        kernelSize, sigma, amount);
+}
+
+Mat ContrastEnhancer::processLocalGlobalCombined(const Mat& imageBGR) {
+    // Validate input
+    if (!isValidInput(imageBGR)) {
+        return Mat();
+    }
+
+    printf("=== Combined Local + Global Contrast Enhancement ===\n");
+
+    int originalType = imageBGR.type();
+    Mat processedBGR = imageBGR;
+
+    // Convert to uint8 if needed for color conversion
+    if (originalType != CV_8UC3) {
+        printf("Converting to uint8 for color conversions.\n");
+        processedBGR = convertToUint8(imageBGR);
+    }
+
+    // Step 1: Convert to YCrCb color space
+    Mat ycrcb;
+    cvtColor(processedBGR, ycrcb, COLOR_BGR2YCrCb);
+
+    // Step 2: Split channels
+    vector<Mat> channels;
+    split(ycrcb, channels);
+
+    Mat yChannel = channels[0];  // Luminance channel
+    Mat crChannel = channels[1]; // Cr channel (unchanged)
+    Mat cbChannel = channels[2]; // Cb channel (unchanged)
+
+    printf("Original Y channel range: ");
+    double minY, maxY;
+    minMaxLoc(yChannel, &minY, &maxY);
+    printf("[%.1f, %.1f]\n", minY, maxY);
+
+    // Step 3: Apply Local Contrast Stretching first
+    Mat yLocalEnhanced;
+    localContrastStretching(yChannel, yLocalEnhanced, 15, 5.0, 1.2, 0);
+
+    printf("After local enhancement: ");
+    double minYLocal, maxYLocal;
+    minMaxLoc(yLocalEnhanced, &minYLocal, &maxYLocal);
+    printf("[%.1f, %.1f]\n", minYLocal, maxYLocal);
+
+    // Step 4: Apply Global Contrast Stretching to the locally enhanced result
+    Mat yFinalEnhanced;
+    //globalContrastEnhancement(yLocalEnhanced, yFinalEnhanced);
+    equalizeHist(yLocalEnhanced, yFinalEnhanced);
+
+    printf("After global enhancement: ");
+    double minYFinal, maxYFinal;
+    minMaxLoc(yFinalEnhanced, &minYFinal, &maxYFinal);
+    printf("[%.1f, %.1f]\n", minYFinal, maxYFinal);
+
+    // Step 5: Combine the results (as mentioned in the paper)
+    // The paper suggests combining local and global methods
+    Mat yCombined;
+
+    // Method 1: Weighted combination
+    // combined = ? * global + ? * local + ? * original
+    double alpha = 0.5;  // Weight for global result
+    double beta = 0.3;   // Weight for local result  
+    double gamma = 0.2;  // Weight for original
+
+    Mat yGlobalOnly;
+    globalContrastEnhancement(yChannel, yGlobalOnly);
+
+    // Ensure all matrices are the same type
+    Mat yChannelF, yLocalF, yGlobalF, yFinalF;
+    yChannel.convertTo(yChannelF, CV_32FC1);
+    yLocalEnhanced.convertTo(yLocalF, CV_32FC1);
+    yGlobalOnly.convertTo(yGlobalF, CV_32FC1);
+    yFinalEnhanced.convertTo(yFinalF, CV_32FC1);
+
+    // Weighted combination
+    yCombined = alpha * yFinalF + beta * yLocalF + gamma * yChannelF;
+
+    // Convert back to original type
+    yCombined.convertTo(yCombined, yChannel.type());
+
+    printf("Combined result range: ");
+    double minYComb, maxYComb;
+    minMaxLoc(yCombined, &minYComb, &maxYComb);
+    printf("[%.1f, %.1f]\n", minYComb, maxYComb);
+
+    // Step 6: Merge channels back
+    vector<Mat> enhancedChannels = { yCombined, crChannel, cbChannel };
+    Mat ycrcbEnhanced;
+    merge(enhancedChannels, ycrcbEnhanced);
+
+    // Step 7: Convert back to BGR
+    Mat enhancedBGR;
+    cvtColor(ycrcbEnhanced, enhancedBGR, COLOR_YCrCb2BGR);
+
+    // Step 8: Convert back to original type if needed
+    if (originalType != CV_8UC3) {
+        Mat result = convertFromUint8(enhancedBGR, originalType);
+        printf("Converting from uint8 for color conversions.\n");
+        return result;
+    }
+
+    printf("=== Combined Enhancement Complete ===\n");
+    return enhancedBGR;
+}
+
 Mat ContrastEnhancer::process(const Mat& imageBGR) {
     // Validate input
     if (!isValidInput(imageBGR)) {
@@ -284,6 +499,7 @@ Mat ContrastEnhancer::processOptimized(const Mat& imageBGR) {
 
     // Convert to uint8 if needed for color conversion
     if (originalType != CV_8UC3) {
+        printf("Convert to uint8 for color converions.");
         processedBGR = convertToUint8(imageBGR);
     }
 
@@ -311,6 +527,64 @@ Mat ContrastEnhancer::processOptimized(const Mat& imageBGR) {
     // Convert back to original type if needed
     if (originalType != CV_8UC3) {
         Mat result = convertFromUint8(enhancedBGR, originalType);
+        printf("Convert from uint8 for color converions.");
+        return result;
+    }
+
+    return enhancedBGR;
+}
+
+// Alternative: Use OpenCV's built-in conversion for better performance and accuracy
+Mat ContrastEnhancer::processOptimizedcustomeq(const Mat& imageBGR) {
+    // Validate input
+    if (!isValidInput(imageBGR)) {
+        return Mat();
+    }
+
+    int originalType = imageBGR.type();
+    Mat processedBGR = imageBGR;
+
+    // Convert to uint8 if needed for color conversion
+    if (originalType != CV_8UC3) {
+        printf("Convert to uint8 for color converions.");
+        processedBGR = convertToUint8(imageBGR);
+    }
+
+    // Use OpenCV's optimized color conversion
+    Mat ycrcb;
+    cvtColor(processedBGR, ycrcb, COLOR_BGR2YCrCb);
+
+    // Split channels
+    vector<Mat> channels;
+    split(ycrcb, channels);
+
+    // Debug: Check Y channel range before enhancement
+    double minY, maxY;
+    minMaxLoc(channels[0], &minY, &maxY);
+    printf("Y channel before enhancement: [%.1f, %.1f]\n", minY, maxY);
+
+    // Apply histogram equalization only to Y channel (already uint8)
+    Mat yEq;
+    globalContrastEnhancement(channels[0], yEq);
+
+    // Debug: Check Y channel range after enhancement
+    double minYEq, maxYEq;
+    minMaxLoc(yEq, &minYEq, &maxYEq);
+    printf("Y channel after enhancement: [%.1f, %.1f]\n", minYEq, maxYEq);
+
+    // Merge back
+    vector<Mat> enhancedChannels = { yEq, channels[1], channels[2] };
+    Mat ycrcbEq;
+    merge(enhancedChannels, ycrcbEq);
+
+    // Convert back to BGR
+    Mat enhancedBGR;
+    cvtColor(ycrcbEq, enhancedBGR, COLOR_YCrCb2BGR);
+
+    // Convert back to original type if needed
+    if (originalType != CV_8UC3) {
+        Mat result = convertFromUint8(enhancedBGR, originalType);
+        printf("Convert from uint8 for color converions.");
         return result;
     }
 

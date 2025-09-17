@@ -319,8 +319,9 @@ int CmSalCut::Demo(CStr imgNameW, CStr gtImgW, CStr salDir)
 #pragma omp parallel for 
 	for (int i = 0; i < imgNum; i++){
 		string name = names[i] + ext;
-		if (CmFile::FileExist(salDir + names[i] + "_RCC.png") && 
-			CmFile::FileExist(salDir + names[i] + "_RCATT.png"))
+		if (CmFile::FileExist(salDir + names[i] + "_RCC.png") &&
+			CmFile::FileExist(salDir + names[i] + "_GCEATT.png")
+			)
 			continue;
 
 		printf("Processing %d/%dth image: %-70s\r", i, imgNum, _S(name));
@@ -352,14 +353,54 @@ int CmSalCut::Demo(CStr imgNameW, CStr gtImgW, CStr salDir)
 				
 		}
 
-		// Method 2: Adaptive Triple Thresholding approach
-		if (!CmFile::FileExist(salDir + names[i] + "_RCATT.png")) {
+		//// Method 2: Adaptive Triple Thresholding approach
+		//if (!CmFile::FileExist(salDir + names[i] + "_GCEATT.png")) {
+		//	Mat img3f_e = imread(inDir + name);
+
+		//	ContrastEnhancer enhancer;
+		//	Mat enhanced_img3f = enhancer.process(img3f_e);
+		//	imwrite(salDir + names[i] + "_GCE_img.png", enhanced_img3f);
+
+		//	enhanced_img3f.convertTo(enhanced_img3f, CV_32FC3, 1.0 / 255);
+		//	Mat enhanced_sal = CmSaliencyRC::GetRC(enhanced_img3f);
+		//	imwrite(salDir + names[i] + "_GCE.png", enhanced_sal * 255);
+
+		//	////Apply light smoothing (less than original method)
+		//	GaussianBlur(enhanced_sal, enhanced_sal, Size(9, 9), 0);
+		//	normalize(enhanced_sal, enhanced_sal, 0, 1, NORM_MINMAX);
+
+		//	// Apply Adaptive Triple Thresholding
+		//	Mat attResult = CmSalCut::CutObjsATT(enhanced_img3f, enhanced_sal, 2, 5);
+
+		//	if (!attResult.empty()) {
+		//		// Post-process: remove small components
+		//		Mat cleanedResult = CmCv::GetNZRegionsLS(attResult, 0.005);
+		//		if (!cleanedResult.empty()) {
+		//			imwrite(salDir + names[i] + "_GCEATT.png", cleanedResult);
+		//		}
+		//		else {
+		//			imwrite(salDir + names[i] + "_GCEATT.png", attResult);
+		//		}
+		//	}
+		//	else {
+		//		printf("Adaptive Triple Thresholding failed for image: %s\n", _S(names[i]));
+		//	}
+
+		//}
+
+		// Method 3: Adaptive Triple Thresholding approach (With OpenCV Contrast Enhance - More aligned with Paper)
+		if (!CmFile::FileExist(salDir + names[i] + "_GCEATT.png")) {
+			Mat img3f_e = imread(inDir + name);
+
 			ContrastEnhancer enhancer;
-			Mat enhanced_img3f = enhancer.process(img3f);
+			Mat enhanced_img3f = enhancer.processOptimized(img3f_e);
+			imwrite(salDir + names[i] + "_GCE_img.png", enhanced_img3f);
+
+			enhanced_img3f.convertTo(enhanced_img3f, CV_32FC3, 1.0 / 255);
 			Mat enhanced_sal = CmSaliencyRC::GetRC(enhanced_img3f);
 			imwrite(salDir + names[i] + "_GCE.png", enhanced_sal * 255);
 
-			//Apply light smoothing (less than original method)
+			////Apply light smoothing (less than original method)
 			GaussianBlur(enhanced_sal, enhanced_sal, Size(9, 9), 0);
 			normalize(enhanced_sal, enhanced_sal, 0, 1, NORM_MINMAX);
 
@@ -381,6 +422,76 @@ int CmSalCut::Demo(CStr imgNameW, CStr gtImgW, CStr salDir)
 			}
 
 		}
+
+		//// Method 4: Adaptive Triple Thresholding approach (With OpenCV Contrast Enhance, and Custom Global Hist eq)
+		//if (!CmFile::FileExist(salDir + names[i] + "_GCEATT_OCV_CE.png")) {
+		//	Mat img3f_f = imread(inDir + name);
+
+		//	ContrastEnhancer enhancer;
+		//	Mat cvenhanced_img3f = enhancer.processOptimizedcustomeq(img3f_f);
+		//	imwrite(salDir + names[i] + "_GCE_OCV_CE_img.png", cvenhanced_img3f);
+
+		//	cvenhanced_img3f.convertTo(cvenhanced_img3f, CV_32FC3, 1.0 / 255);
+		//	Mat cvenhanced_sal = CmSaliencyRC::GetRC(cvenhanced_img3f);
+		//	imwrite(salDir + names[i] + "_GCE_OCV_CE.png", cvenhanced_sal * 255);
+
+		//	////Apply light smoothing (less than original method)
+		//	GaussianBlur(cvenhanced_sal, cvenhanced_sal, Size(9, 9), 0);
+		//	normalize(cvenhanced_sal, cvenhanced_sal, 0, 1, NORM_MINMAX);
+
+		//	// Apply Adaptive Triple Thresholding
+		//	Mat cvattResult = CmSalCut::CutObjsATT(cvenhanced_img3f, cvenhanced_sal, 2, 5);
+
+		//	if (!cvattResult.empty()) {
+		//		// Post-process: remove small components
+		//		Mat cvcleanedResult = CmCv::GetNZRegionsLS(cvattResult, 0.005);
+		//		if (!cvcleanedResult.empty()) {
+		//			imwrite(salDir + names[i] + "_GCEATT_OCV_CE.png", cvcleanedResult);
+		//		}
+		//		else {
+		//			imwrite(salDir + names[i] + "_GCEATT_OCV_CE.png", cvattResult);
+		//		}
+		//	}
+		//	else {
+		//		printf("Adaptive Triple Thresholding failed for image: %s\n", _S(names[i]));
+		//	}
+
+		//}
+
+		//// Method 5: Adaptive Triple Thresholding approach (With OpenCV Contrast Enhance, and Custom Global Hist eq)
+		//if (!CmFile::FileExist(salDir + names[i] + "_GCEATT_OCV_CE.png")) {
+		//	Mat img3f_f = imread(inDir + name);
+
+		//	ContrastEnhancer enhancer;
+		//	Mat cvenhanced_img3f = enhancer.processLocalGlobalCombined(img3f_f);
+		//	imwrite(salDir + names[i] + "_GCE_OCV_CE_img.png", cvenhanced_img3f);
+
+		//	cvenhanced_img3f.convertTo(cvenhanced_img3f, CV_32FC3, 1.0 / 255);
+		//	Mat cvenhanced_sal = CmSaliencyRC::GetRC(cvenhanced_img3f);
+		//	imwrite(salDir + names[i] + "_GCE_OCV_CE.png", cvenhanced_sal * 255);
+
+		//	////Apply light smoothing (less than original method)
+		//	GaussianBlur(cvenhanced_sal, cvenhanced_sal, Size(9, 9), 0);
+		//	normalize(cvenhanced_sal, cvenhanced_sal, 0, 1, NORM_MINMAX);
+
+		//	// Apply Adaptive Triple Thresholding
+		//	Mat cvattResult = CmSalCut::CutObjsATT(cvenhanced_img3f, cvenhanced_sal, 2, 5);
+
+		//	if (!cvattResult.empty()) {
+		//		// Post-process: remove small components
+		//		Mat cvcleanedResult = CmCv::GetNZRegionsLS(cvattResult, 0.005);
+		//		if (!cvcleanedResult.empty()) {
+		//			imwrite(salDir + names[i] + "_GCEATT_OCV_CE.png", cvcleanedResult);
+		//		}
+		//		else {
+		//			imwrite(salDir + names[i] + "_GCEATT_OCV_CE.png", cvattResult);
+		//		}
+		//	}
+		//	else {
+		//		printf("Adaptive Triple Thresholding failed for image: %s\n", _S(names[i]));
+		//	}
+
+		//}
 		
 	}
 	tmRC.Stop();
